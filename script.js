@@ -36,8 +36,30 @@ document.addEventListener('DOMContentLoaded', () => {
         return "0000 0000";
     }
 
+    // সার্কুলার অবজেক্ট ও উইন্ডো রেফারেন্স হ্যান্ডলিং সেফ ক্লোন
+    function safeClone(obj, seen = new WeakSet()) {
+        if (obj === null || typeof obj !== 'object') return obj;
+        if (typeof obj === 'function') return '[Function]';
+        if (seen.has(obj) || obj === window || obj.constructor?.name === 'Window') {
+            return '[Ref Block]';
+        }
+        seen.add(obj);
+
+        if (Array.isArray(obj)) {
+            return obj.map(item => safeClone(item, seen));
+        }
+
+        let copy = {};
+        for (let key in obj) {
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                copy[key] = safeClone(obj[key], seen);
+            }
+        }
+        return copy;
+    }
+
     /**
-     * VIRTUAL MACHINE MEMORY ENGINE (FIXED LOOP STRING CONCATENATION)
+     * VIRTUAL MACHINE MEMORY ENGINE (SAFE TDZ EXTENSION)
      */
     function executeAndMapMemory(userCode) {
         let timeline = [];
@@ -46,201 +68,160 @@ document.addEventListener('DOMContentLoaded', () => {
         let stackPointer = 0x7FFF00;
         let heapPointer = 0x5001A0;
 
-        let virtualStack = {};
         let virtualHeap = {};
-        let localVariables = {};
+        let heapRefMap = new Map();
+        let variableAddresses = {};
 
-        let lines = userCode.split('\n');
-
-        // 🌟 ডাইনামিক গ্লোবাল কন্টেক্সট ইভালুয়েটর (যা ব্রাউজার স্কোপে প্লাস-চিহ্ন প্রসেস করে)
-        function safeEval(str) {
-            try {
-                let scopeContextArgs = Object.keys(localVariables);
-                let scopeContextVals = Object.values(localVariables);
-                let evaluator = new Function(...scopeContextArgs, `return ${str};`);
-                return evaluator(...scopeContextVals);
-            } catch (e) {
-                return str.replace(/['"]/g, '');
+        function getVariableAddress(varName, isRef) {
+            if (!variableAddresses[varName]) {
+                stackPointer -= isRef ? 8 : 4;
+                variableAddresses[varName] = `0x${stackPointer.toString(16).toUpperCase()}`;
             }
+            return variableAddresses[varName];
         }
 
-        function pushStep(lineIdx) {
+        function getHeapAddress(obj) {
+            if (heapRefMap.has(obj)) return heapRefMap.get(obj);
+            heapPointer += 32;
+            let hAddr = `0x${heapPointer.toString(16).toUpperCase()}`;
+            heapRefMap.set(obj, hAddr);
+            return hAddr;
+        }
+
+        // ইউজারের দেওয়া সোর্স কোড থেকে সমস্ত আইডেন্টিফায়ার স্ক্যান করা
+        let detectedIdentifiers = new Set();
+        let idRegex = /(?:let|const|var|function)\s+(\w+)/g;
+        let match;
+        while ((match = idRegex.exec(userCode)) !== null) {
+            detectedIdentifiers.add(match[1]);
+        }
+
+        let originalLines = userCode.split('\n');
+        let instrumentedCode = "";
+
+        originalLines.forEach((line, index) => {
+            let trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('//')) {
+                instrumentedCode += line + "\n";
+                return;
+            }
+
+            // কনসোল ডাইরেক্ট ইন্টারসেপ্টর
+            if (trimmed.includes('console.log')) {
+                line = line.replace(/console\.log\((.*)\)/g, `__captureLog($1); console.log($1)`);
+            }
+
+            // TDZ Error এড়াতে প্রতিটি আইডিইন্টিফায়ারকে আলাদা আলাদা try-catch ব্লকে স্ক্যান করার ডাইনামিক অবজেক্ট বিল্ডার
+            let safeScopeBuilder = "(() => { let _scope = {}; ";
+            detectedIdentifiers.forEach(id => {
+                safeScopeBuilder += `try { if (typeof ${id} !== 'undefined' || true) { _scope.${id} = ${id}; } } catch(e) {} `;
+            });
+            safeScopeBuilder += "return _scope; })()";
+
+            // প্রথমে লাইনটি এক্সিকিউট হবে, তারপর সেফ স্কোপ নিয়ে ট্র্যাকার কল হবে
+            instrumentedCode += `${line}\n__trace(${index}, ${safeScopeBuilder});\n`;
+        });
+
+        // রানটাইম ট্র্যাকার কোর গেটওয়ে
+        window.__trace = function(lineIdx, currentScope) {
+            let virtualStack = {};
+
+            for (let varName in currentScope) {
+                let val = currentScope[varName];
+                if (val === undefined) continue;
+
+                // ১. স্ট্রিং ডাটা টাইপ (Heap Reference)
+                if (typeof val === 'string') {
+                    let hAddr = getHeapAddress(val);
+                    virtualHeap[hAddr] = { type: 'String/Char Array', dataset: val.split('') };
+
+                    virtualStack[varName] = {
+                        address: getVariableAddress(varName, true),
+                        type: 'Reference (String)',
+                        isRef: true,
+                        targetRef: hAddr,
+                        value: hAddr
+                    };
+                }
+                // ২. অ্যারে এবং ২D অ্যারে বা অবজেক্ট টাইপ ডাটা (Heap Mapping)
+                else if (typeof val === 'object' && val !== null) {
+                    let hAddr = getHeapAddress(val);
+                    let typeStr = Array.isArray(val) ? (Array.isArray(val[0]) ? '2D Array' : 'Array') : 'Object';
+                    
+                    virtualHeap[hAddr] = { 
+                        type: typeStr, 
+                        dataset: safeClone(val) 
+                    };
+
+                    virtualStack[varName] = {
+                        address: getVariableAddress(varName, true),
+                        type: `Reference (${typeStr})`,
+                        isRef: true,
+                        targetRef: hAddr,
+                        value: hAddr
+                    };
+                } 
+                // ৩. ফাংশন ক্লোজারস
+                else if (typeof val === 'function') {
+                    virtualStack[varName] = {
+                        address: getVariableAddress(varName, false),
+                        type: 'Function',
+                        isRef: false,
+                        targetRef: null,
+                        value: '[Call Frame]'
+                    };
+                }
+                // ৪. প্রিমিティブ টাইপ (Number, Boolean)
+                else {
+                    virtualStack[varName] = {
+                        address: getVariableAddress(varName, false),
+                        type: typeof val,
+                        isRef: false,
+                        targetRef: null,
+                        value: val
+                    };
+                }
+            }
+
+            // টাইমলাইনে স্টেট পুশ
             timeline.push({
                 lineNo: lineIdx,
-                stack: JSON.parse(JSON.stringify(virtualStack)),
-                heap: JSON.parse(JSON.stringify(virtualHeap)),
+                stack: safeClone(virtualStack),
+                heap: safeClone(virtualHeap),
                 logs: [...temporaryLogs].join('\n')
             });
-        }
+        };
 
+        window.__captureLog = function(...args) {
+            let logStr = args.map(arg => typeof arg === 'object' ? JSON.stringify(safeClone(arg)) : arg).join(' ');
+            temporaryLogs.push(logStr);
+        };
+
+        // ভার্চুয়াল এক্সিকিউশন রানার ব্লক
         try {
-            for (let i = 0; i < lines.length; i++) {
-                let line = lines[i].trim();
-                if (!line || line.startsWith('//')) continue;
-
-                // let, const, var ভ্যারিয়েবল ডিক্লেয়ারেশন ট্র্যাপ
-                let varMatch = line.match(/(?:let|const|var)\s+(\w+)\s*=\s*(.*)/);
-                if (varMatch) {
-                    let varName = varMatch[1];
-                    let rawValue = varMatch[2].replace(/;$/, '').trim();
-                    let parsedValue = safeEval(rawValue);
-
-                    localVariables[varName] = parsedValue;
-
-                    // ক) অ্যারে টাইপ ভ্যালু (Heap Reference)
-                    if (Array.isArray(parsedValue)) {
-                        heapPointer += 32;
-                        let hAddr = `0x${heapPointer.toString(16).toUpperCase()}`;
-                        virtualHeap[hAddr] = { type: 'Array', dataset: [...parsedValue] };
-
-                        stackPointer -= 8;
-                        virtualStack[varName] = {
-                            address: `0x${stackPointer.toString(16).toUpperCase()}`,
-                            type: 'Reference (Array)',
-                            isRef: true,
-                            targetRef: hAddr,
-                            value: hAddr
-                        };
-                    }
-                    // খ) অবজেক্ট টাইপ ভ্যালু (Heap Reference)
-                    else if (typeof parsedValue === 'object' && parsedValue !== null) {
-                        heapPointer += 32;
-                        let hAddr = `0x${heapPointer.toString(16).toUpperCase()}`;
-                        virtualHeap[hAddr] = { type: 'Object', dataset: { ...parsedValue } };
-
-                        stackPointer -= 8;
-                        virtualStack[varName] = {
-                            address: `0x${stackPointer.toString(16).toUpperCase()}`,
-                            type: 'Reference (Object)',
-                            isRef: true,
-                            targetRef: hAddr,
-                            value: hAddr
-                        };
-                    }
-                    // গ) স্ট্রিং টাইপ ভ্যালু (Heap Character Array Reference)
-                    else if (typeof parsedValue === 'string' && (rawValue.startsWith('"') || rawValue.startsWith("'"))) {
-                        heapPointer += 24;
-                        let hAddr = `0x${heapPointer.toString(16).toUpperCase()}`;
-                        virtualHeap[hAddr] = { type: 'String/Char Array', dataset: parsedValue.split('') };
-
-                        stackPointer -= 8;
-                        virtualStack[varName] = {
-                            address: `0x${stackPointer.toString(16).toUpperCase()}`,
-                            type: 'Reference (String)',
-                            isRef: true,
-                            targetRef: hAddr,
-                            value: hAddr
-                        };
-                    }
-                    // ঘ) প্রিমিティブ টাইপ ভ্যালু (Stack Native Frame)
-                    else {
-                        stackPointer -= 4;
-                        virtualStack[varName] = {
-                            address: `0x${stackPointer.toString(16).toUpperCase()}`,
-                            type: typeof parsedValue,
-                            isRef: false,
-                            targetRef: null,
-                            value: parsedValue
-                        };
-                    }
-                    pushStep(i);
-                }
-
-                // 🌟 ২. লুপ রানটাইম ট্র্যাকিং সিমুলেটর (মাল্টিপল ভ্যারিয়েবল সাপোর্ট ফিক্স)
-                if (line.startsWith('for')) {
-                    let loopConfig = line.match(/let\s+(\w+)\s*=\s*(\d+);\s*\1\s*<\s*([^;]+);\s*\1\s*\+\+/);
-                    if (loopConfig) {
-                        let iteratorName = loopConfig[1];
-                        let startVal = parseInt(loopConfig[2]);
-                        let limitCondition = loopConfig[3].trim();
-                        let limit = isNaN(parseInt(limitCondition)) ? safeEval(limitCondition) : parseInt(limitCondition);
-
-                        stackPointer -= 4;
-                        let loopVarAddr = `0x${stackPointer.toString(16).toUpperCase()}`;
-
-                        // লুপের ভেতরের সব লাইন এক্সট্র্যাক্ট করা
-                        let loopBodyLines = [];
-                        let j = i + 1;
-                        while (j < lines.length && !lines[j].includes('}')) {
-                            loopBodyLines.push({ text: lines[j].trim(), absoluteLineNo: j });
-                            j++;
-                        }
-
-                        // লুপ এক্সিকিউশন ভার্চুয়াল সিমুলেশন শুরু
-                        for (let stepVal = startVal; stepVal < limit; stepVal++) {
-                            localVariables[iteratorName] = stepVal;
-                            virtualStack[iteratorName] = {
-                                address: loopVarAddr,
-                                type: 'number (iterator)',
-                                isRef: false,
-                                targetRef: null,
-                                value: stepVal
-                            };
-
-                            // লুপের ভেতরের লাইনগুলো প্রসেস করা
-                            loopBodyLines.forEach((body) => {
-                                let bodyLine = body.text;
-                                if (!bodyLine) return;
-
-                                // যদি ভেতরের লাইনে কোনো নতুন লোকাল ভ্যারিয়েবল ডিক্লেয়ার করা হয় (যেমন: let current = marks[i])
-                                let innerVarMatch = bodyLine.match(/(?:let|const|var)\s+(\w+)\s*=\s*(.*)/);
-                                if (innerVarMatch) {
-                                    let innerVarName = innerVarMatch[1];
-                                    let innerRawVal = innerVarMatch[2].replace(/;$/, '').trim();
-                                    let innerParsedVal = safeEval(innerRawVal);
-
-                                    localVariables[innerVarName] = innerParsedVal;
-                                    
-                                    // ইনার ভ্যারিয়েবল স্ট্যাকে পুশ (প্রিমিটিভ হিসেবে হ্যান্ডেলড)
-                                    virtualStack[innerVarName] = {
-                                        address: `0x${(stackPointer - 4).toString(16).toUpperCase()}`,
-                                        type: typeof innerParsedVal,
-                                        isRef: false,
-                                        targetRef: null,
-                                        value: innerParsedVal
-                                    };
-                                }
-
-                                // কনসোল লগ পার্সিং ফিক্স (প্লাস চিহ্নের জটিল কনক্যাটিনেশন রেন্ডার হবে)
-                                if (bodyLine.includes('console.log')) {
-                                    let logMatch = bodyLine.match(/console\.log\((.*)\)/);
-                                    if (logMatch) {
-                                        let finalLogOutput = safeEval(logMatch[1]);
-                                        temporaryLogs.push(finalLogOutput);
-                                    }
-                                }
-                            });
-                            
-                            pushStep(i); // টাইমলাইনে কারেন্ট স্ন্যাপশট স্টেট সেভ করা
-                        }
-                        i = j; // মেইন লুপ কাউন্টার লাফ দিয়ে ক্লোজিং ব্র্যাকেটে যাবে
-                    }
-                }
-
-                // ৩. লুপের বাইরে সাধারণ একক কনসোল লগ থাকলে
-                if (line.includes('console.log') && !line.startsWith('for') && !userCode.includes('for')) {
-                    let logMatch = line.match(/console\.log\((.*)\)/);
-                    if (logMatch) {
-                        temporaryLogs.push(safeEval(logMatch[1]));
-                    }
-                    pushStep(i);
-                }
-            }
-
-            if (timeline.length === 0) {
-                pushStep(0);
-            }
-
+            let runner = new Function(instrumentedCode);
+            runner();
         } catch (err) {
-            timeline = [{
+            timeline.push({
                 lineNo: 0,
-                stack: { "Engine Core": { address: "0xERROR", type: "system", isRef: false, value: "Failure" } },
+                stack: { "VM Engine Status": { address: "0xERROR", type: "system", isRef: false, value: "Runtime Error" } },
                 heap: {},
-                logs: `Execution Error: ${err.message}`
-            }];
+                logs: `Runtime Error: ${err.message}`
+            });
+        } finally {
+            delete window.__trace;
+            delete window.__captureLog;
         }
 
-        return timeline;
+        // পরপর ডুপ্লিকেট লাইনের স্টেট ফিল্টার আউট করা
+        let uniqueTimeline = [];
+        for (let i = 0; i < timeline.length; i++) {
+            if (i === 0 || timeline[i].lineNo !== timeline[i - 1].lineNo || JSON.stringify(timeline[i].stack) !== JSON.stringify(timeline[i - 1].stack)) {
+                uniqueTimeline.push(timeline[i]);
+            }
+        }
+
+        return uniqueTimeline.length > 0 ? uniqueTimeline : [{ lineNo: 0, stack: {}, heap: {}, logs: "No State Found." }];
     }
 
     // UI Snapshot Step Renderer Pass
@@ -249,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const snapshot = MasterTimelineTrace[index];
 
-        // 🌟 CODE LINE HIGHLIGHT INDICATOR MECHANISM
+        // CODE LINE HIGHLIGHT INDICATOR MECHANISM
         if (currentMarker !== null) {
             editor.removeLineClass(currentMarker, "background", "active-code-line");
         }
@@ -322,17 +303,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 box.className = 'heap-alloc-node';
                 box.innerHTML = `<div class="heap-node-addr">${addr} [${item.type}]</div>`;
 
-                if (item.type === 'Array' || item.type === 'String/Char Array') {
+                if (item.type === 'Array' || item.type === '2D Array' || item.type === 'String/Char Array') {
                     let grid = document.createElement('div');
                     grid.className = 'array-element-grid';
                     
                     item.dataset.forEach((val, idx) => {
+                        let displayVal = typeof val === 'object' && val !== null ? JSON.stringify(val) : val;
                         let parsedNum = parseInt(val);
                         let cellBinary = getBinaryRepresentation(isNaN(parsedNum) ? val : parsedNum);
                         grid.innerHTML += `
                             <div class="array-cell" title="Binary: ${cellBinary}">
                                 <span class="cell-idx">[${idx}]</span>
-                                <span class="cell-val">${val}</span>
+                                <span class="cell-val">${displayVal}</span>
                             </div>
                         `;
                     });
