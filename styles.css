@@ -1,0 +1,382 @@
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    --bg-dark-core: #090d16;
+    --bg-panel-surface: #111827;
+    --bg-inner-terminal: #030712;
+    --border-slate: #1f2937;
+    --text-silver: #f3f4f6;
+    --text-dim: #6b7280;
+    --color-neon-blue: #3b82f6;
+    --color-neon-emerald: #10b981;
+    --color-neon-amethyst: #a855f7;
+    --color-neon-amber: #f59e0b;
+    --font-monospace: 'Fira Code', 'Consolas', monospace;
+}
+
+body {
+    background-color: var(--bg-dark-core);
+    color: var(--text-silver);
+    font-family: 'Inter', system-ui, sans-serif;
+    padding: 12px; /* মোবাইলের জন্য সামান্য কমানো হয়েছে */
+    min-height: 100vh;
+    overflow-x: hidden; /* গ্লোবাল হরাইজনটাল স্ক্রল ব্লক করার জন্য */
+}
+
+header {
+    background: linear-gradient(135deg, #1e1b4b 0%, #030712 100%);
+    border: 1px solid var(--border-slate);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 15px;
+}
+
+.header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+header h1 { 
+    font-size: 1.15rem; 
+    font-weight: 700; 
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.badge { 
+    background: var(--color-neon-blue); 
+    font-size: 10px; 
+    padding: 2px 6px; 
+    border-radius: 4px; 
+    margin-left: 6px;
+    white-space: nowrap;
+}
+
+.developer-tag { 
+    color: var(--color-neon-emerald); 
+    font-family: var(--font-monospace); 
+    font-size: 11px; 
+    word-break: break-all;
+}
+
+/* Main Grid Architecture */
+.tutor-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.3fr;
+    gap: 15px;
+    align-items: start;
+}
+
+.panel-column {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    min-width: 0; /* গ্রিড ব্রেকিং ফিক্স */
+}
+
+.panel-card {
+    background-color: var(--bg-panel-surface);
+    border: 1px solid var(--border-slate);
+    border-radius: 10px;
+    padding: 15px;
+    min-width: 0;
+}
+
+.card-header {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+
+.code-wrapper { 
+    margin-bottom: 12px; 
+    border-radius: 6px; 
+    overflow: hidden; 
+    border: 1px solid var(--border-slate); 
+}
+
+.CodeMirror { 
+    height: 230px; 
+    font-family: var(--font-monospace); 
+    font-size: 13px; 
+}
+
+.btn {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.btn-primary { 
+    background-color: var(--color-neon-blue); 
+    color: white; 
+    width: 100%; 
+    margin-bottom: 12px; 
+}
+.btn-primary:hover { background-color: #2563eb; }
+
+/* Navigation Controllers */
+.navigation-cluster {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--bg-inner-terminal);
+    padding: 6px;
+    border-radius: 6px;
+    border: 1px solid var(--border-slate);
+    gap: 4px;
+    overflow-x: auto; /* ছোট স্ক্রিনে বাটন স্ক্রল করবে */
+}
+
+.btn-nav { 
+    background-color: #1f2937; 
+    color: white; 
+    border: 1px solid var(--border-slate); 
+    padding: 6px 10px; 
+    font-size: 11px;
+    flex: 1; /* বাটনগুলো সমান জায়গা নিবে */
+    min-width: fit-content;
+}
+.btn-nav:hover:not(:disabled) { background-color: #374151; }
+.btn-nav:disabled { opacity: 0.2; cursor: not-allowed; }
+#stepCounter { 
+    font-family: var(--font-monospace); 
+    font-size: 11px; 
+    color: var(--color-neon-amber); 
+    padding: 0 4px;
+    white-space: nowrap;
+}
+
+.console-box {
+    background-color: var(--bg-inner-terminal);
+    border-left: 3px solid var(--color-neon-emerald);
+    color: #10b981;
+    font-family: var(--font-monospace);
+    font-size: 12px;
+    padding: 10px;
+    min-height: 85px;
+    max-height: 140px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    border-radius: 4px;
+}
+
+/* Core Memory Matrix Workspace */
+.memory-grid-workspace {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    background-color: var(--bg-inner-terminal);
+    padding: 12px;
+    border-radius: 8px;
+    min-height: 420px;
+}
+
+.memory-block {
+    min-width: 0; /* কন্টেন্ট ব্রেকিং গার্ড */
+    width: 100%;
+}
+
+.memory-block h3 {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--border-slate);
+    text-transform: uppercase;
+}
+
+/* 🌟 STACK TABLE MOBILE OVERFLOW PROTECTION CONTROLLER */
+#stackRoot {
+    width: 100%;
+    overflow-x: auto; /* মোবাইলে টেবিলটি ডান-বামে সুইপ/স্ক্রল করা যাবে */
+    -webkit-overflow-scrolling: touch;
+    border-radius: 6px;
+}
+
+/* Real Hardware Engine Stack Table Layout Matrix */
+.stack-memory-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-monospace);
+    background-color: #111827;
+    border: 1px solid #374151;
+    font-size: 12px;
+    min-width: 460px; /* মোবাইলে কলামগুলোর মিনিমাম রিডিবিলিটি লক রাখার জন্য */
+}
+
+.stack-memory-table th {
+    background-color: #1f2937;
+    color: #9ca3af;
+    text-align: left;
+    padding: 8px 10px;
+    font-weight: 600;
+    border-bottom: 2px solid #374151;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+}
+
+.stack-table-row {
+    border-bottom: 1px solid #1f2937;
+}
+
+.mem-addr-cell {
+    color: #6b7280;
+    padding: 8px 10px;
+    font-weight: bold;
+}
+
+.mem-name-cell {
+    padding: 8px 10px;
+    font-weight: bold;
+}
+
+.primitive-ident { color: #10b981; }
+.ref-ident { color: #f43f5e; }
+.mem-type-cell { padding: 8px 10px; }
+
+.badge-prim, .badge-ref {
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 10px;
+    white-space: nowrap;
+}
+.badge-prim { background-color: rgba(16, 185, 129, 0.15); color: #34d399; }
+.badge-ref { background-color: rgba(244, 63, 94, 0.15); color: #fb7185; }
+
+.mem-val-cell {
+    padding: 8px 10px;
+}
+
+.prim-val-span {
+    color: #f59e0b;
+    font-size: 13px;
+    font-weight: 500;
+    word-break: break-all;
+}
+
+.binary-subtext {
+    font-size: 9px;
+    color: #4b5563;
+    margin-top: 2px;
+    white-space: nowrap;
+}
+
+/* Heap Components Optimization */
+.heap-alloc-node {
+    background-color: #111827;
+    border: 2px dashed var(--color-neon-amethyst);
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 12px;
+    font-family: var(--font-monospace);
+    word-break: break-all;
+}
+
+.heap-node-addr { 
+    font-size: 10px; 
+    color: var(--color-neon-amethyst); 
+    font-weight: bold; 
+    border-bottom: 1px solid var(--border-slate); 
+    padding-bottom: 4px; 
+    margin-bottom: 8px; 
+}
+
+/* Array Horizontal/Matrix Visualization Grid */
+.array-element-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+    background-color: var(--bg-dark-core);
+    padding: 4px;
+    border-radius: 4px;
+}
+
+.array-cell {
+    flex: 1;
+    min-width: 40px; /* স্ক্রিন সাইজ অনুযায়ী বক্স ছোট হবে */
+    background: #1f2937;
+    border: 1px solid #4b5563;
+    text-align: center;
+    border-radius: 3px;
+    padding: 4px 2px;
+}
+
+.cell-idx { font-size: 9px; color: var(--text-dim); display: block; border-bottom: 1px solid #374151; padding-bottom: 1px; }
+.cell-val { font-size: 11px; color: #22c55e; font-weight: bold; display: block; margin-top: 2px; }
+
+.pointer-link-tag {
+    color: var(--color-neon-amethyst);
+    font-weight: bold;
+    font-size: 10px;
+    background: rgba(168, 85, 247, 0.1);
+    padding: 2px 5px;
+    border-radius: 3px;
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.placeholder-msg { font-size: 12px; color: #374151; font-style: italic; text-align: center; padding-top: 30px; }
+
+.active-code-line {
+    background-color: rgba(234, 179, 8, 0.2) !important;
+    border-left: 4px solid #f59e0b !important;
+}
+
+/* ==========================================================================
+   🌟 RESPONSIVE MEDIA QUERIES (MOBILE CORE MATRIX MASTER)
+   ========================================================================== */
+
+/* 1. Tablets & Low Res Laptops (1024px and down) */
+@media (max-width: 1024px) {
+    .tutor-grid {
+        grid-template-columns: 1fr; /* এডিটর এবং মেমরি উপর-নিচে চলে আসবে */
+    }
+}
+
+/* 2. Mobile Landscape & Phablets (640px and down) */
+@media (max-width: 640px) {
+    .memory-grid-workspace {
+        grid-template-columns: 1fr; /* স্ট্যাক এবং হিপ ব্লক উপর-নিচে বসবে */
+        padding: 10px;
+    }
+    
+    .CodeMirror {
+        height: 200px; /* মোবাইল স্ক্রিনের রেশিও ঠিক রাখতে এডিটর হাইট সামান্য কম */
+    }
+}
+
+/* 3. Tiny Mobile Screens (360px and down) */
+@media (max-width: 360px) {
+    body {
+        padding: 8px;
+    }
+    header h1 {
+        font-size: 1rem;
+    }
+    .panel-card {
+        padding: 10px;
+    }
+}

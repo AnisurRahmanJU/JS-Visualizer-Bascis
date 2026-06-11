@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal JS Memory Tutor (Pure Stack & Heap)</title>
+    <link rel="stylesheet" href="styles.css">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/dracula.min.css">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
+</head>
+<body>
+
+    <header>
+        <div class="header-container">
+            <h1>Universal JS Runtime Visualizer <span class="badge">V3 Core Engine</span></h1>
+            <p class="developer-tag">Developer: Md. Anisur Rahman</p>
+        </div>
+    </header>
+
+    <main class="tutor-grid">
+        <div class="panel-column left-panel">
+            <div class="panel-card">
+                <div class="card-header">📂 JavaScript Input Sandbox</div>
+                <div class="code-wrapper">
+                    <textarea id="codeEditor">let name = "Anis";
+let scores = [95, 88, 100];
+let user = { id: 7, active: true };
+
+for (let i = 0; i < scores.length; i++) {
+    console.log("Score at index " + i + " is: " + scores[i]);
+}</textarea>
+                </div>
+                <button id="btnVisualize" class="btn btn-primary">⚡ Compile & Trace Memory Allocation</button>
+                
+                <div class="navigation-cluster">
+                    <button id="btnFirst" class="btn btn-nav" disabled>|◄ First</button>
+                    <button id="btnPrev" class="btn btn-nav" disabled>◄ Prev</button>
+                    <span id="stepCounter">Step: 0 / 0</span>
+                    <button id="btnNext" class="btn btn-nav" disabled>Next ►</button>
+                    <button id="btnLast" class="btn btn-nav" disabled>Last ►|</button>
+                </div>
+            </div>
+
+            <div class="panel-card">
+                <div class="card-header">🖥️ Standard Console Output</div>
+                <div id="consoleOutput" class="console-box">System idle. Awaiting compilation pass...</div>
+            </div>
+        </div>
+
+        <div class="panel-column right-panel">
+            <div class="panel-card spec-card">
+                <div class="card-header">🧠 Memory Visualizer Box (Stack & Heap Model)</div>
+                
+                <div class="memory-grid-workspace">
+                    <div class="memory-block stack-segment">
+                        <h3>Execution Call Stack</h3>
+                        <div id="stackRoot" class="frame-container">
+                            <div class="placeholder-msg">Stack uninitialized</div>
+                        </div>
+                    </div>
+
+                    <div class="memory-block heap-segment">
+                        <h3>Heap Memory Allocation</h3>
+                        <div id="heapRoot" class="heap-container">
+                            <div class="placeholder-msg">Heap unallocated</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
