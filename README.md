@@ -1,2 +1,2 @@
-# JS Visualizer Pro
-JavaScript Visualizer Pro
+# JS Visualizer Basics
+JavaScript Visualizer Basics
