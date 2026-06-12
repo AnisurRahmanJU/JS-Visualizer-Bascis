@@ -1,3 +1,4 @@
+
 document.addEventListener('DOMContentLoaded', () => {
     // CodeMirror UI Instantiation
     const editor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
@@ -59,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * VIRTUAL MACHINE MEMORY ENGINE (ROBUST MULTI-LINE BUFFER PARSER)
+     * VIRTUAL MACHINE MEMORY ENGINE (TOTAL LINE-BY-LINE TRACKER WITH RECURSION OPTIMIZATION)
      */
     function executeAndMapMemory(userCode) {
         let timeline = [];
@@ -72,12 +73,16 @@ document.addEventListener('DOMContentLoaded', () => {
         let heapRefMap = new Map();
         let variableAddresses = {};
 
+        // এক্সিকিউশন কন্টেক্সট ট্র্যাকিং এনভায়রনমেন্ট
+        let callContextStack = [{ name: 'Global', args: {}, paramNames: [] }];
+
         function getVariableAddress(varName, isRef) {
-            if (!variableAddresses[varName]) {
+            let contextKey = `${callContextStack.map(c => c.name).join('_')}_${varName}`;
+            if (!variableAddresses[contextKey]) {
                 stackPointer -= isRef ? 8 : 4;
-                variableAddresses[varName] = `0x${stackPointer.toString(16).toUpperCase()}`;
+                variableAddresses[contextKey] = `0x${stackPointer.toString(16).toUpperCase()}`;
             }
-            return variableAddresses[varName];
+            return variableAddresses[contextKey];
         }
 
         function getHeapAddress(obj) {
@@ -102,14 +107,31 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // সেফ স্যান্ডবক্স স্কোপ জেনারেটর (TDZ Safe Protection)
-        let safeScopeBuilder = "(() => { let _scope = {}; ";
-        detectedIdentifiers.forEach(id => {
-            safeScopeBuilder += `try { if (typeof ${id} !== 'undefined') { _scope.${id} = ${id}; } } catch(e) {} `;
-        });
-        safeScopeBuilder += "return _scope; })()";
+        // ডায়নামিক স্কোপ বিল্ডার (প্যারামিটারের অরিজিনাল নাম `arg_n` রিড করার লজিক সহ)
+        let safeScopeBuilder = `(() => { 
+            let _scope = {}; 
+            
+            if (typeof __getCurrentParams === 'function') {
+                let currentParams = __getCurrentParams();
+                if (currentParams && typeof arguments !== 'undefined') {
+                    currentParams.forEach((pName, i) => {
+                        _scope['arg_' + pName] = arguments[i];
+                    });
+                }
+            }
 
-        // স্টেট-ড্রিভেন বাফার ইনস্ট্রুমেন্টার (ফিক্সড মাল্টি-লাইন ও লুপ স্কোপ)
+            [${Array.from(detectedIdentifiers).map(id => `'${id}'`).join(',')}].forEach(id => {
+                try { 
+                    let val = eval(id);
+                    if (typeof val !== 'undefined') { 
+                        _scope[id] = val; 
+                    } 
+                } catch(e) {}
+            });
+            return _scope; 
+        })()`;
+
+        // নিখুঁত লাইন-বাই-লাইন ট্র্যাকিং ইনস্ট্রুমেন্টার (গ্লোবাল ও ফাংশন ইন্টারনাল দুই ক্ষেত্রেই সমান প্রযোজ্য)
         let originalLines = userCode.split('\n');
         let instrumentedCode = "";
         let statementBuffer = "";
@@ -119,58 +141,136 @@ document.addEventListener('DOMContentLoaded', () => {
         originalLines.forEach((line, index) => {
             let trimmed = line.trim();
             
-            // কমেন্ট এবং খালি লাইন ফিল্টার
             if (!trimmed || trimmed.startsWith('//')) {
                 instrumentedCode += line + "\n";
                 return;
             }
 
-            // কনসোল ইন্টারসেপ্টর প্যাচ
             if (trimmed.includes('console.log')) {
                 line = line.replace(/console\.log\((.*)\)/g, `__captureLog($1); console.log($1)`);
                 trimmed = line.trim();
             }
 
-            // ব্র্যাকেট ডেপথ ট্র্যাকিং
+            // ফাংশন ডিক্লেয়ারেশন ও কন্টেক্সট এন্ট্রি ক্যাপচার
+            let funcMatch = trimmed.match(/^function\s+(\w+)\s*\((.*)\)\s*\{/);
+            if (funcMatch) {
+                braceDepth += 1;
+                let funcName = funcMatch[1];
+                let params = funcMatch[2].split(',').map(p => p.trim()).filter(p => p);
+                let quotedParams = params.map(p => `'${p}'`).join(',');
+                
+                instrumentedCode += line + `\n__pushContext('${funcName}', [${quotedParams}], [${params.join(',')}]);\n__trace(${index}, ${safeScopeBuilder});\n`;
+                return;
+            }
+
             braceDepth += (trimmed.match(/\{/g) || []).length;
             braceDepth -= (trimmed.match(/\}/g) || []).length;
             bracketDepth += (trimmed.match(/\[/g) || []).length;
             bracketDepth -= (trimmed.match(/\]/g) || []).length;
 
+            // ফাংশন রিটার্ন এবং ফ্রেম ডিলিট ইন্টারসেপ্টর
+            if (trimmed.startsWith('return ') || trimmed === 'return;') {
+                let retExpr = trimmed.replace('return', '').replace(';', '').trim();
+                if (retExpr) {
+                    statementBuffer += `let __retVal = ${retExpr};\n__trace(${index}, ${safeScopeBuilder}, true, __retVal);\n__popContext();\nreturn __retVal;\n`;
+                } else {
+                    statementBuffer += `__trace(${index}, ${safeScopeBuilder}, true, undefined);\n__popContext();\nreturn;\n`;
+                }
+                instrumentedCode += statementBuffer;
+                statementBuffer = "";
+                return;
+            }
+
             statementBuffer += line + "\n";
 
-            // যদি এটি কোনো লুপ বা কন্ডিশনাল হেডার হয় (যেমন: for (...) { বা if (...) {)
+            // কন্ডিশনাল হেডার বা নরমাল স্টেটমেন্ট ক্লোজ হলেই লাইন-বাই-লাইন ফায়ার হবে
             let isControlFlowHeader = /^(for|if|while|switch)\b/.test(trimmed) && trimmed.endsWith('{');
-
             if (isControlFlowHeader) {
-                // লুপ বা কন্ডিশন হেডারে সেমিকোলন ছাড়া ট্র্যাকার পুশ
                 instrumentedCode += statementBuffer + `\n__trace(${index}, ${safeScopeBuilder});\n`;
                 statementBuffer = "";
-            } 
-            // যখন কোনো স্টেটমেন্ট বা মাল্টি-লাইন অ্যাসাইনমেন্ট সম্পূর্ণ ক্লোজড বা জিরো ডেপ্তে আসে
-            else if (braceDepth === 0 && bracketDepth === 0) {
-                // নিরাপদ সেমিকোলন ইজেক্টর দিয়ে আলাদা লাইনে ট্র্যাকার পুশ
+            } else if (bracketDepth === 0 && (trimmed.endsWith(';') || trimmed.endsWith('}'))) {
                 instrumentedCode += statementBuffer + `;\n__trace(${index}, ${safeScopeBuilder});\n`;
                 statementBuffer = "";
             }
-            // অবজেক্ট বা অ্যারে ডিক্লেয়ারেশনের ভেতরের লাইনে (depth > 0) কোনো ট্র্যাকার ইনজেক্ট করা হবে না, 
-            // তা বাফারে জমা থাকবে যতক্ষণ না ব্র্যাকেট ক্লোজ হচ্ছে।
         });
 
-        // বাফারে কোনো অবশিষ্টাংশ থাকলে রিলিজ
         if (statementBuffer.trim()) {
             instrumentedCode += statementBuffer + `;\n__trace(${originalLines.length - 1}, ${safeScopeBuilder});\n`;
         }
 
-        // রানটাইম ট্র্যাকার কোর গেটওয়ে
-        window.__trace = function(lineIdx, currentScope) {
+        // রানটাইম কন্টেক্সট ম্যানেজমেন্ট API
+        window.__pushContext = function(name, paramNames, argValues) {
+            let argsObj = {};
+            paramNames.forEach((pName, i) => {
+                argsObj[pName] = argValues[i];
+            });
+            let formattedCall = `${name}(${argValues.join(', ')})`;
+            callContextStack.push({ name: formattedCall, args: argsObj, paramNames: paramNames });
+        };
+
+        window.__popContext = function() {
+            if (callContextStack.length > 1) {
+                callContextStack.pop();
+            }
+        };
+
+        window.__getCurrentParams = function() {
+            if (callContextStack.length > 1) {
+                return callContextStack[callContextStack.length - 1].paramNames;
+            }
+            return null;
+        };
+
+        // ভার্চুয়াল মেমরি ট্র্যাকার কোর গেটওয়ে
+        window.__trace = function(lineIdx, currentScope, isReturn = false, returnVal = null) {
             let virtualStack = {};
+            let activeContextName = callContextStack[callContextStack.length - 1].name;
+
+            // কারেন্ট অ্যাক্টিভ রিকার্শন কল ফ্রেম পুশ
+            if (activeContextName !== 'Global') {
+                virtualStack[`[Call Frame: ${activeContextName}]`] = {
+                    address: "---",
+                    type: "Context Frame",
+                    isRef: false,
+                    value: "Active"
+                };
+            }
+
+            if (isReturn) {
+                virtualStack[`[Return Trace: ${activeContextName}]`] = {
+                    address: "---",
+                    type: "Returning Value",
+                    isRef: false,
+                    value: returnVal
+                };
+            }
+
+            // ডিপ নেস্টেড অবজেক্ট মেমরি এলোকেশন পার্সার ফাংশন
+            function parseAndAllocateHeap(objValue) {
+                let hAddr = getHeapAddress(objValue);
+                let typeStr = Array.isArray(objValue) ? (Array.isArray(objValue[0]) ? '2D Array' : 'Array') : 'Object';
+                
+                let clonedDataset = Array.isArray(objValue) ? [] : {};
+                for (let k in objValue) {
+                    if (Object.prototype.hasOwnProperty.call(objValue, k)) {
+                        let subVal = objValue[k];
+                        if (typeof subVal === 'object' && subVal !== null) {
+                            let subAddr = parseAndAllocateHeap(subVal);
+                            clonedDataset[k] = `Reference ➔ ${subAddr}`;
+                        } else {
+                            clonedDataset[k] = safeClone(subVal);
+                        }
+                    }
+                }
+
+                virtualHeap[hAddr] = { type: typeStr, dataset: clonedDataset };
+                return hAddr;
+            }
 
             for (let varName in currentScope) {
                 let val = currentScope[varName];
                 if (val === undefined || typeof val === 'symbol') continue;
 
-                // ১. স্ট্রিং ডাটা টাইপ
                 if (typeof val === 'string') {
                     let hAddr = getHeapAddress(val);
                     virtualHeap[hAddr] = { type: 'String/Char Array', dataset: val.split('') };
@@ -183,25 +283,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         value: hAddr
                     };
                 }
-                // ২. অ্যারে, ২D অ্যারে এবং অবজেক্ট ডাটা টাইপ
                 else if (typeof val === 'object' && val !== null) {
-                    let hAddr = getHeapAddress(val);
-                    let typeStr = Array.isArray(val) ? (Array.isArray(val[0]) ? '2D Array' : 'Array') : 'Object';
+                    let targetHeapAddress = parseAndAllocateHeap(val);
+                    let isArr = Array.isArray(val);
                     
-                    virtualHeap[hAddr] = { 
-                        type: typeStr, 
-                        dataset: safeClone(val) 
-                    };
-
                     virtualStack[varName] = {
                         address: getVariableAddress(varName, true),
-                        type: `Reference (${typeStr})`,
+                        type: `Reference (${isArr ? 'Array' : 'Object'})`,
                         isRef: true,
-                        targetRef: hAddr,
-                        value: hAddr
+                        targetRef: targetHeapAddress,
+                        value: targetHeapAddress
                     };
                 } 
-                // ৩. ফাংশন এক্সিকিউশন ফ্রেম
                 else if (typeof val === 'function') {
                     virtualStack[varName] = {
                         address: getVariableAddress(varName, false),
@@ -211,7 +304,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         value: '[Call Frame]'
                     };
                 }
-                // ৪. প্রিমিティブ টাইপস (Number, Boolean)
                 else {
                     virtualStack[varName] = {
                         address: getVariableAddress(varName, false),
@@ -236,7 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
             temporaryLogs.push(logStr);
         };
 
-        // ভার্চুয়াল এক্সিকিউশন রানার রান
+        // ভার্চুয়াল এক্সিকিউশন রানার
         try {
             let runner = new Function(instrumentedCode);
             runner();
@@ -250,12 +342,18 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             delete window.__trace;
             delete window.__captureLog;
+            delete window.__pushContext;
+            delete window.__popContext;
+            delete window.__getCurrentParams;
         }
 
-        // ডুপ্লিকেট স্টেট ফিল্টারিং পাস
+        // রিডান্ডেন্ট ডুপ্লিকেট স্টেট ফিল্টারিং (যা লাইন-বাই-লাইন ট্র্যাকিং অন রেখেও রিকার্শনের স্প্যাম স্টেপ দূর করে)
         let uniqueTimeline = [];
         for (let i = 0; i < timeline.length; i++) {
-            if (i === 0 || timeline[i].lineNo !== timeline[i - 1].lineNo || JSON.stringify(timeline[i].stack) !== JSON.stringify(timeline[i - 1].stack)) {
+            if (i === 0 || 
+                timeline[i].lineNo !== timeline[i - 1].lineNo || 
+                JSON.stringify(timeline[i].stack) !== JSON.stringify(timeline[i - 1].stack) ||
+                JSON.stringify(timeline[i].heap) !== JSON.stringify(timeline[i - 1].heap)) {
                 uniqueTimeline.push(timeline[i]);
             }
         }
@@ -303,35 +401,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 let tr = document.createElement('tr');
                 tr.className = 'stack-table-row';
 
-                let binaryCodeBytes = getBinaryRepresentation(node.value);
-
-                if (node.isRef) {
+                if (name.startsWith('[Call Frame') || name.startsWith('[Return Trace')) {
+                    tr.style.backgroundColor = name.startsWith('[Call Frame') ? '#1e3a8a' : '#065f46';
                     tr.innerHTML = `
-                        <td class="mem-addr-cell">${node.address}</td>
-                        <td class="mem-name-cell ref-ident">${name}</td>
-                        <td class="mem-type-cell"><span class="badge-ref">${node.type}</span></td>
-                        <td class="mem-val-cell">
-                            <span class="pointer-link-tag">Reference ID ➔ ${node.targetRef}</span>
-                            <div class="binary-subtext">[Referenced Object]</div>
-                        </td>
+                        <td style="color:#94a3b8; font-family:monospace; padding:8px;">STACK</td>
+                        <td colspan="2" style="color:#fff; font-weight:bold; padding:8px;">${name}</td>
+                        <td style="color:#facc15; font-weight:bold; padding:8px;">${node.value}</td>
                     `;
                 } else {
-                    tr.innerHTML = `
-                        <td class="mem-addr-cell">${node.address}</td>
-                        <td class="mem-name-cell primitive-ident">${name}</td>
-                        <td class="mem-type-cell"><span class="badge-prim">${node.type}</span></td>
-                        <td class="mem-val-cell">
-                            <span class="prim-val-span">${node.value}</span>
-                            <div class="binary-subtext">BIN: ${binaryCodeBytes}</div>
-                        </td>
-                    `;
+                    let binaryCodeBytes = getBinaryRepresentation(node.value);
+
+                    if (node.isRef) {
+                        tr.innerHTML = `
+                            <td class="mem-addr-cell">${node.address}</td>
+                            <td class="mem-name-cell ref-ident">${name}</td>
+                            <td class="mem-type-cell"><span class="badge-ref">${node.type}</span></td>
+                            <td class="mem-val-cell">
+                                <span class="pointer-link-tag">Reference ID ➔ ${node.targetRef}</span>
+                                <div class="binary-subtext">[Referenced Memory Location]</div>
+                            </td>
+                        `;
+                    } else {
+                        tr.innerHTML = `
+                            <td class="mem-addr-cell">${node.address}</td>
+                            <td class="mem-name-cell primitive-ident">${name}</td>
+                            <td class="mem-type-cell"><span class="badge-prim">${node.type}</span></td>
+                            <td class="mem-val-cell">
+                                <span class="prim-val-span">${node.value}</span>
+                                <div class="binary-subtext">BIN: ${binaryCodeBytes}</div>
+                            </td>
+                        `;
+                    }
                 }
                 tbody.appendChild(tr);
             }
             stackRoot.appendChild(table);
         }
 
-        // ২. হিপ মেমরি রেন্ডারিং পাস (ফ্ল্যাট রিপ্রেজেন্টেশন)
+        // ২. হিপ মেমরি রেন্ডারিং পাস (ফ্ল্যাট ও নেস্টেড অবজেক্ট রিপ্রেজেন্টেশন)
         heapRoot.innerHTML = '';
         if (Object.keys(snapshot.heap).length === 0) {
             heapRoot.innerHTML = `<div class="placeholder-msg">Heap Memory Buffer Clear</div>`;
@@ -377,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         box.innerHTML += `
                             <div style="font-size:12px; padding:4px 0; font-family:monospace;" title="Binary: ${propertyBinary}">
                                 <strong style="color:#60a5fa">${key}:</strong> 
-                                <span style="color:#eab308">${JSON.stringify(item.dataset[key])}</span>
+                                <span style="color:#eab308">${typeof item.dataset[key] === 'object' ? JSON.stringify(item.dataset[key]) : item.dataset[key]}</span>
                             </div>
                         `;
                     }
