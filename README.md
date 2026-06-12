@@ -680,5 +680,28 @@ function complex(n) {
 
 console.log(complex(10));
 ```
+### 51
 
+```js id="m50"
+function fact(n) {
+    if (n <= 1) return 1;
+    return n * fact(n - 1);
+}
 
+console.log(fact(5));
+```
+
+### 52
+
+```js id="m50"
+function fib(n) {
+    if (n <= 1) return n;
+    return fib(n - 1) + fib(n - 2);
+}
+
+for (let i = 0; i < 10; i++) {
+    if (i >= 0) {
+        console.log(fib(i));
+    }
+}
+```
