@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * VIRTUAL MACHINE MEMORY ENGINE (ROBUST BUFFER BUFFER STATEMENT PARSER)
+     * VIRTUAL MACHINE MEMORY ENGINE (ROBUST MULTI-LINE BUFFER PARSER)
      */
     function executeAndMapMemory(userCode) {
         let timeline = [];
@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return hAddr;
         }
 
-        // ইউনিভার্সাল আইডেন্টিফায়ার এক্সট্র্যাক্টর
+        // ইউনিভার্সাল আইডেন্টিফায়ার এক্সট্র্যাক্টর
         let detectedIdentifiers = new Set();
         let declRegex = /(?:let|const|var|function)\s+(\w+)/g;
         let match;
@@ -139,32 +139,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
             statementBuffer += line + "\n";
 
-            // যদি এটি কোনো লুপ বা কন্ডিশনাল হেডার হয় (যেমন: for (...) { )
+            // যদি এটি কোনো লুপ বা কন্ডিশনাল হেডার হয় (যেমন: for (...) { বা if (...) {)
             let isControlFlowHeader = /^(for|if|while|switch)\b/.test(trimmed) && trimmed.endsWith('{');
 
             if (isControlFlowHeader) {
-                instrumentedCode += statementBuffer + `__trace(${index}, ${safeScopeBuilder});\n`;
+                // লুপ বা কন্ডিশন হেডারে সেমিকোলন ছাড়া ট্র্যাকার পুশ
+                instrumentedCode += statementBuffer + `\n__trace(${index}, ${safeScopeBuilder});\n`;
                 statementBuffer = "";
             } 
-            // যখন কোনো নরমাল স্টেটমেন্ট বা মাল্টি-লাইন অ্যাসাইনমেন্ট সম্পূর্ণ ক্লোজড বা জিরো ডেপ্তে আসে
+            // যখন কোনো স্টেটমেন্ট বা মাল্টি-লাইন অ্যাসাইনমেন্ট সম্পূর্ণ ক্লোজড বা জিরো ডেপ্তে আসে
             else if (braceDepth === 0 && bracketDepth === 0) {
-                instrumentedCode += statementBuffer + `__trace(${index}, ${safeScopeBuilder});\n`;
+                // নিরাপদ সেমিকোলন ইজেক্টর দিয়ে আলাদা লাইনে ট্র্যাকার পুশ
+                instrumentedCode += statementBuffer + `;\n__trace(${index}, ${safeScopeBuilder});\n`;
                 statementBuffer = "";
-            } else {
-                // ব্র্যাকেট ব্যালেন্সড না হওয়া পর্যন্ত বাফারে ডাটা হোল্ড করে রাখা হচ্ছে
-                // তবে লুপের ভেতরের সাধারণ কোড লাইন হলে আমরা স্টেটমেন্ট রিলিজ করে ট্র্যাকার দেবো
-                if (braceDepth === 1 && !trimmed.endsWith('{') && !trimmed.endsWith(',')) {
-                    if (trimmed.endsWith(';') || (trimmed.match(/\}/g) || []).length === 0) {
-                        instrumentedCode += statementBuffer + `__trace(${index}, ${safeScopeBuilder});\n`;
-                        statementBuffer = "";
-                    }
-                }
             }
+            // অবজেক্ট বা অ্যারে ডিক্লেয়ারেশনের ভেতরের লাইনে (depth > 0) কোনো ট্র্যাকার ইনজেক্ট করা হবে না, 
+            // তা বাফারে জমা থাকবে যতক্ষণ না ব্র্যাকেট ক্লোজ হচ্ছে।
         });
 
         // বাফারে কোনো অবশিষ্টাংশ থাকলে রিলিজ
         if (statementBuffer.trim()) {
-            instrumentedCode += statementBuffer + `\n__trace(${originalLines.length - 1}, ${safeScopeBuilder});\n`;
+            instrumentedCode += statementBuffer + `;\n__trace(${originalLines.length - 1}, ${safeScopeBuilder});\n`;
         }
 
         // রানটাইম ট্র্যাকার কোর গেটওয়ে
