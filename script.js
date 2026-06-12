@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * VIRTUAL MACHINE MEMORY ENGINE (SAFE TDZ EXTENSION)
+     * VIRTUAL MACHINE MEMORY ENGINE (ROBUST BUFFER BUFFER STATEMENT PARSER)
      */
     function executeAndMapMemory(userCode) {
         let timeline = [];
@@ -88,39 +88,84 @@ document.addEventListener('DOMContentLoaded', () => {
             return hAddr;
         }
 
-        // ইউজারের দেওয়া সোর্স কোড থেকে সমস্ত আইডেন্টিফায়ার স্ক্যান করা
+        // ইউনিভার্সাল আইডেন্টিফায়ার এক্সট্র্যাক্টর
         let detectedIdentifiers = new Set();
-        let idRegex = /(?:let|const|var|function)\s+(\w+)/g;
+        let declRegex = /(?:let|const|var|function)\s+(\w+)/g;
         let match;
-        while ((match = idRegex.exec(userCode)) !== null) {
+        while ((match = declRegex.exec(userCode)) !== null) {
             detectedIdentifiers.add(match[1]);
         }
+        let assignRegex = /(?:\b)(\w+)(?=\s*=\s*|\s*\+=\s*|\s*-=\s*|\s*\+\+\s*|\s*--\s*)/g;
+        while ((match = assignRegex.exec(userCode)) !== null) {
+            if (!['if', 'for', 'while', 'switch', 'return', 'console'].includes(match[1])) {
+                detectedIdentifiers.add(match[1]);
+            }
+        }
 
+        // সেফ স্যান্ডবক্স স্কোপ জেনারেটর (TDZ Safe Protection)
+        let safeScopeBuilder = "(() => { let _scope = {}; ";
+        detectedIdentifiers.forEach(id => {
+            safeScopeBuilder += `try { if (typeof ${id} !== 'undefined') { _scope.${id} = ${id}; } } catch(e) {} `;
+        });
+        safeScopeBuilder += "return _scope; })()";
+
+        // স্টেট-ড্রিভেন বাফার ইনস্ট্রুমেন্টার (ফিক্সড মাল্টি-লাইন ও লুপ স্কোপ)
         let originalLines = userCode.split('\n');
         let instrumentedCode = "";
+        let statementBuffer = "";
+        let braceDepth = 0;
+        let bracketDepth = 0;
 
         originalLines.forEach((line, index) => {
             let trimmed = line.trim();
+            
+            // কমেন্ট এবং খালি লাইন ফিল্টার
             if (!trimmed || trimmed.startsWith('//')) {
                 instrumentedCode += line + "\n";
                 return;
             }
 
-            // কনসোল ডাইরেক্ট ইন্টারসেপ্টর
+            // কনসোল ইন্টারসেপ্টর প্যাচ
             if (trimmed.includes('console.log')) {
                 line = line.replace(/console\.log\((.*)\)/g, `__captureLog($1); console.log($1)`);
+                trimmed = line.trim();
             }
 
-            // TDZ Error এড়াতে প্রতিটি আইডিইন্টিফায়ারকে আলাদা আলাদা try-catch ব্লকে স্ক্যান করার ডাইনামিক অবজেক্ট বিল্ডার
-            let safeScopeBuilder = "(() => { let _scope = {}; ";
-            detectedIdentifiers.forEach(id => {
-                safeScopeBuilder += `try { if (typeof ${id} !== 'undefined' || true) { _scope.${id} = ${id}; } } catch(e) {} `;
-            });
-            safeScopeBuilder += "return _scope; })()";
+            // ব্র্যাকেট ডেপথ ট্র্যাকিং
+            braceDepth += (trimmed.match(/\{/g) || []).length;
+            braceDepth -= (trimmed.match(/\}/g) || []).length;
+            bracketDepth += (trimmed.match(/\[/g) || []).length;
+            bracketDepth -= (trimmed.match(/\]/g) || []).length;
 
-            // প্রথমে লাইনটি এক্সিকিউট হবে, তারপর সেফ স্কোপ নিয়ে ট্র্যাকার কল হবে
-            instrumentedCode += `${line}\n__trace(${index}, ${safeScopeBuilder});\n`;
+            statementBuffer += line + "\n";
+
+            // যদি এটি কোনো লুপ বা কন্ডিশনাল হেডার হয় (যেমন: for (...) { )
+            let isControlFlowHeader = /^(for|if|while|switch)\b/.test(trimmed) && trimmed.endsWith('{');
+
+            if (isControlFlowHeader) {
+                instrumentedCode += statementBuffer + `__trace(${index}, ${safeScopeBuilder});\n`;
+                statementBuffer = "";
+            } 
+            // যখন কোনো নরমাল স্টেটমেন্ট বা মাল্টি-লাইন অ্যাসাইনমেন্ট সম্পূর্ণ ক্লোজড বা জিরো ডেপ্তে আসে
+            else if (braceDepth === 0 && bracketDepth === 0) {
+                instrumentedCode += statementBuffer + `__trace(${index}, ${safeScopeBuilder});\n`;
+                statementBuffer = "";
+            } else {
+                // ব্র্যাকেট ব্যালেন্সড না হওয়া পর্যন্ত বাফারে ডাটা হোল্ড করে রাখা হচ্ছে
+                // তবে লুপের ভেতরের সাধারণ কোড লাইন হলে আমরা স্টেটমেন্ট রিলিজ করে ট্র্যাকার দেবো
+                if (braceDepth === 1 && !trimmed.endsWith('{') && !trimmed.endsWith(',')) {
+                    if (trimmed.endsWith(';') || (trimmed.match(/\}/g) || []).length === 0) {
+                        instrumentedCode += statementBuffer + `__trace(${index}, ${safeScopeBuilder});\n`;
+                        statementBuffer = "";
+                    }
+                }
+            }
         });
+
+        // বাফারে কোনো অবশিষ্টাংশ থাকলে রিলিজ
+        if (statementBuffer.trim()) {
+            instrumentedCode += statementBuffer + `\n__trace(${originalLines.length - 1}, ${safeScopeBuilder});\n`;
+        }
 
         // রানটাইম ট্র্যাকার কোর গেটওয়ে
         window.__trace = function(lineIdx, currentScope) {
@@ -128,9 +173,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             for (let varName in currentScope) {
                 let val = currentScope[varName];
-                if (val === undefined) continue;
+                if (val === undefined || typeof val === 'symbol') continue;
 
-                // ১. স্ট্রিং ডাটা টাইপ (Heap Reference)
+                // ১. স্ট্রিং ডাটা টাইপ
                 if (typeof val === 'string') {
                     let hAddr = getHeapAddress(val);
                     virtualHeap[hAddr] = { type: 'String/Char Array', dataset: val.split('') };
@@ -143,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         value: hAddr
                     };
                 }
-                // ২. অ্যারে এবং ২D অ্যারে বা অবজেক্ট টাইপ ডাটা (Heap Mapping)
+                // ২. অ্যারে, ২D অ্যারে এবং অবজেক্ট ডাটা টাইপ
                 else if (typeof val === 'object' && val !== null) {
                     let hAddr = getHeapAddress(val);
                     let typeStr = Array.isArray(val) ? (Array.isArray(val[0]) ? '2D Array' : 'Array') : 'Object';
@@ -161,7 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         value: hAddr
                     };
                 } 
-                // ৩. ফাংশন ক্লোজারস
+                // ৩. ফাংশন এক্সিকিউশন ফ্রেম
                 else if (typeof val === 'function') {
                     virtualStack[varName] = {
                         address: getVariableAddress(varName, false),
@@ -171,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         value: '[Call Frame]'
                     };
                 }
-                // ৪. টাইপ (Number, Boolean)
+                // ৪. প্রিমিティブ টাইপস (Number, Boolean)
                 else {
                     virtualStack[varName] = {
                         address: getVariableAddress(varName, false),
@@ -183,7 +228,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // টাইমলাইনে স্টেট পুশ
             timeline.push({
                 lineNo: lineIdx,
                 stack: safeClone(virtualStack),
@@ -197,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
             temporaryLogs.push(logStr);
         };
 
-        // ভার্চুয়াল এক্সিকিউশন রানার ব্লক
+        // ভার্চুয়াল এক্সিকিউশন রানার রান
         try {
             let runner = new Function(instrumentedCode);
             runner();
@@ -213,7 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
             delete window.__captureLog;
         }
 
-        // পরপর ডুপ্লিকেট লাইনের স্টেট ফিল্টার আউট করা
+        // ডুপ্লিকেট স্টেট ফিল্টারিং পাস
         let uniqueTimeline = [];
         for (let i = 0; i < timeline.length; i++) {
             if (i === 0 || timeline[i].lineNo !== timeline[i - 1].lineNo || JSON.stringify(timeline[i].stack) !== JSON.stringify(timeline[i - 1].stack)) {
@@ -238,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
         editor.addLineClass(currentMarker, "background", "active-code-line");
         editor.scrollIntoView({line: currentMarker, ch: 0}, 200);
 
-        // ১. রিয়েল স্ট্যাক মেমরি টেবিল রেন্ডারিং পাস
+        // ১. স্ট্যাক মেমরি টেবিল রেন্ডারিং পাস
         stackRoot.innerHTML = '';
         if (Object.keys(snapshot.stack).length === 0) {
             stackRoot.innerHTML = `<div class="placeholder-msg">Stack Frame Empty (Awaiting Executions)</div>`;
@@ -292,7 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
             stackRoot.appendChild(table);
         }
 
-        // ২. হিপ মেমরি অবজেক্ট ও ক্যারেক্টার অ্যারে বক্স রেন্ডারিং
+        // ২. হিপ মেমরি রেন্ডারিং পাস (ফ্ল্যাট রিপ্রেজেন্টেশন)
         heapRoot.innerHTML = '';
         if (Object.keys(snapshot.heap).length === 0) {
             heapRoot.innerHTML = `<div class="placeholder-msg">Heap Memory Buffer Clear</div>`;
@@ -307,7 +351,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     let grid = document.createElement('div');
                     grid.className = 'array-element-grid';
                     
-                    item.dataset.forEach((val, idx) => {
+                    let flatDataset = [];
+                    if (item.type === '2D Array' || Array.isArray(item.dataset[0])) {
+                        item.dataset.forEach(subArray => {
+                            if (Array.isArray(subArray)) {
+                                flatDataset.push(...subArray);
+                            } else {
+                                flatDataset.push(subArray);
+                            }
+                        });
+                    } else {
+                        flatDataset = item.dataset;
+                    }
+                    
+                    flatDataset.forEach((val, idx) => {
                         let displayVal = typeof val === 'object' && val !== null ? JSON.stringify(val) : val;
                         let parsedNum = parseInt(val);
                         let cellBinary = getBinaryRepresentation(isNaN(parsedNum) ? val : parsedNum);
