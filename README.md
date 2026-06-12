@@ -1,4 +1,4 @@
-# JS Visualizer Basics
+# JS Visualizer Basics 
 > JavaScript Visualizer Basics Tool
 ---
 # Code Examples
