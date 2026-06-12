@@ -272,8 +272,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td class="mem-name-cell ref-ident">${name}</td>
                         <td class="mem-type-cell"><span class="badge-ref">${node.type}</span></td>
                         <td class="mem-val-cell">
-                            <span class="pointer-link-tag">Pointer ➔ ${node.targetRef}</span>
-                            <div class="binary-subtext">[Heap Alloc Block]</div>
+                            <span class="pointer-link-tag">Reference ID ➔ ${node.targetRef}</span>
+                            <div class="binary-subtext">[Referenced Object]</div>
                         </td>
                     `;
                 } else {
