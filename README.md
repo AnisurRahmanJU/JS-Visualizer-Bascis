@@ -251,6 +251,16 @@ console.log(car.brand, car.year);
 ### 18
 
 ```js id="m18"
+const car = { brand: "Toyota", year: 2020 };
+car.color = "Red";
+Object.seal(car);
+car.year = 2025;
+console.log(car.brand, car.year, car.color);
+```
+
+### 19
+
+```js id="m19"
 let obj = {};
 
 for (let i = 0; i < 3; i++) {
@@ -258,20 +268,6 @@ for (let i = 0; i < 3; i++) {
 }
 
 console.log(obj);
-```
-
-### 19
-
-```js id="m19"
-let person = {
-  name: "Ali",
-  address: {
-    city: "Dhaka",
-    zip: 1212
-  }
-};
-
-console.log(person.address.city);
 ```
 
 ### 20
