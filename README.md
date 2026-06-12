@@ -1,5 +1,5 @@
 # JS Visualizer Basics
-> JavaScript Visualizer Basics
+> JavaScript Visualizer Basics Tool
 ---
 # Code Examples
 ---
