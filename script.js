@@ -171,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         value: '[Call Frame]'
                     };
                 }
-                // ৪. প্রিমিティブ টাইপ (Number, Boolean)
+                // ৪. টাইপ (Number, Boolean)
                 else {
                     virtualStack[varName] = {
                         address: getVariableAddress(varName, false),
@@ -251,7 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <th>Address</th>
                         <th>Identifier</th>
                         <th>Type</th>
-                        <th>Value / Payload Data</th>
+                        <th>Value</th>
                     </tr>
                 </thead>
                 <tbody>
