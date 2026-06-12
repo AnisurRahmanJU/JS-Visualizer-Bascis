@@ -1,4 +1,3 @@
-
 document.addEventListener('DOMContentLoaded', () => {
     // CodeMirror UI Instantiation
     const editor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
@@ -131,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return _scope; 
         })()`;
 
-        // নিখুঁত লাইন-বাই-লাইন ট্র্যাকিং ইনস্ট্রুমেন্টার (গ্লোবাল ও ফাংশন ইন্টারনাল দুই ক্ষেত্রেই সমান প্রযোজ্য)
+        // নিখুঁত লাইন-বাই-লাইন ট্র্যাকিং ইনস্ট্রুমেন্টার
         let originalLines = userCode.split('\n');
         let instrumentedCode = "";
         let statementBuffer = "";
@@ -151,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 trimmed = line.trim();
             }
 
-            // ফাংশন ডিক্লেয়ারেশন ও কন্টেক্সট এন্ট্রি ক্যাপচার
+            // ফাংশন ডিক্লেয়ারেশন ও কন্টেক্সট এন্ট্রি ক্যাপচার
             let funcMatch = trimmed.match(/^function\s+(\w+)\s*\((.*)\)\s*\{/);
             if (funcMatch) {
                 braceDepth += 1;
@@ -183,7 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             statementBuffer += line + "\n";
 
-            // কন্ডিশনাল হেডার বা নরমাল স্টেটমেন্ট ক্লোজ হলেই লাইন-বাই-লাইন ফায়ার হবে
+            // কন্ডিশনাল হেডার বা নরমাল স্টেটমেন্ট ক্লোজ হলেই লাইন-বাই-লাইন ফায়ার হবে
             let isControlFlowHeader = /^(for|if|while|switch)\b/.test(trimmed) && trimmed.endsWith('{');
             if (isControlFlowHeader) {
                 instrumentedCode += statementBuffer + `\n__trace(${index}, ${safeScopeBuilder});\n`;
@@ -198,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
             instrumentedCode += statementBuffer + `;\n__trace(${originalLines.length - 1}, ${safeScopeBuilder});\n`;
         }
 
-        // রানটাইম কন্টেক্সট ম্যানেজমেন্ট API
+        // रनটাইম কন্টেক্সট ম্যানেজমেন্ট API
         window.__pushContext = function(name, paramNames, argValues) {
             let argsObj = {};
             paramNames.forEach((pName, i) => {
@@ -226,7 +225,6 @@ document.addEventListener('DOMContentLoaded', () => {
             let virtualStack = {};
             let activeContextName = callContextStack[callContextStack.length - 1].name;
 
-            // কারেন্ট অ্যাক্টিভ রিকার্শন কল ফ্রেম পুশ
             if (activeContextName !== 'Global') {
                 virtualStack[`[Call Frame: ${activeContextName}]`] = {
                     address: "---",
@@ -248,8 +246,18 @@ document.addEventListener('DOMContentLoaded', () => {
             // ডিপ নেস্টেড অবজেক্ট মেমরি এলোকেশন পার্সার ফাংশন
             function parseAndAllocateHeap(objValue) {
                 let hAddr = getHeapAddress(objValue);
-                let typeStr = Array.isArray(objValue) ? (Array.isArray(objValue[0]) ? '2D Array' : 'Array') : 'Object';
                 
+                // চেক করা হচ্ছে এটি ২D অ্যারে কি না
+                let is2DArray = Array.isArray(objValue) && objValue.length > 0 && Array.isArray(objValue[0]);
+                let typeStr = is2DArray ? '2D Array' : (Array.isArray(objValue) ? 'Array' : 'Object');
+                
+                if (is2DArray) {
+                    // সাব-অ্যারেগুলোকে আলাদা রেফারেন্সে না ভেঙে একবারে ডিপ-ক্লোন করে রাখা হচ্ছে
+                    let clean2DData = objValue.map(row => Array.isArray(row) ? [...row] : row);
+                    virtualHeap[hAddr] = { type: typeStr, dataset: clean2DData };
+                    return hAddr;
+                }
+
                 let clonedDataset = Array.isArray(objValue) ? [] : {};
                 for (let k in objValue) {
                     if (Object.prototype.hasOwnProperty.call(objValue, k)) {
@@ -285,11 +293,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 else if (typeof val === 'object' && val !== null) {
                     let targetHeapAddress = parseAndAllocateHeap(val);
-                    let isArr = Array.isArray(val);
+                    let is2D = Array.isArray(val) && val.length > 0 && Array.isArray(val[0]);
+                    let typeLabel = is2D ? '2D Array' : (Array.isArray(val) ? 'Array' : 'Object');
                     
                     virtualStack[varName] = {
                         address: getVariableAddress(varName, true),
-                        type: `Reference (${isArr ? 'Array' : 'Object'})`,
+                        type: `Reference (${typeLabel})`,
                         isRef: true,
                         targetRef: targetHeapAddress,
                         value: targetHeapAddress
@@ -347,7 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
             delete window.__getCurrentParams;
         }
 
-        // রিডান্ডেন্ট ডুপ্লিকেট স্টেট ফিল্টারিং (যা লাইন-বাই-লাইন ট্র্যাকিং অন রেখেও রিকার্শনের স্প্যাম স্টেপ দূর করে)
+        // ডুপ্লিকেট স্টেট ফিল্টারিং
         let uniqueTimeline = [];
         for (let i = 0; i < timeline.length; i++) {
             if (i === 0 || 
@@ -438,7 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
             stackRoot.appendChild(table);
         }
 
-        // ২. হিপ মেমরি রেন্ডারিং পাস (ফ্ল্যাট ও নেস্টেড অবজেক্ট রিপ্রেজেন্টেশন)
+        // ২. হিপ মেমরি রেন্ডারিং পাস (ইউনিফাইড মেট্রিক্স গ্রিড মেকানিজম)
         heapRoot.innerHTML = '';
         if (Object.keys(snapshot.heap).length === 0) {
             heapRoot.innerHTML = `<div class="placeholder-msg">Heap Memory Buffer Clear</div>`;
@@ -449,35 +458,60 @@ document.addEventListener('DOMContentLoaded', () => {
                 box.className = 'heap-alloc-node';
                 box.innerHTML = `<div class="heap-node-addr">${addr} [${item.type}]</div>`;
 
-                if (item.type === 'Array' || item.type === '2D Array' || item.type === 'String/Char Array') {
+                if (item.type === '2D Array') {
+                    // সাব-ব্লক ছাড়া একদম ক্লিন ওয়ান-বক্স গ্রিড মেট্রিক্স লেআউট
+                    let matrixContainer = document.createElement('div');
+                    matrixContainer.className = 'matrix-container';
+                    matrixContainer.style.display = 'flex';
+                    matrixContainer.style.flexDirection = 'column';
+                    matrixContainer.style.gap = '8px';
+                    matrixContainer.style.marginTop = '10px';
+                    matrixContainer.style.padding = '8px';
+                    matrixContainer.style.background = 'rgba(30, 41, 59, 0.5)';
+                    matrixContainer.style.borderRadius = '6px';
+
+                    item.dataset.forEach((row, rowIndex) => {
+                        let rowGrid = document.createElement('div');
+                        rowGrid.className = 'array-element-grid';
+                        rowGrid.style.display = 'flex';
+                        rowGrid.style.gap = '6px';
+
+                        row.forEach((val, colIndex) => {
+                            let displayVal = typeof val === 'object' && val !== null ? JSON.stringify(val) : val;
+                            let parsedNum = parseInt(val);
+                            let cellBinary = getBinaryRepresentation(isNaN(parsedNum) ? val : parsedNum);
+                            
+                            rowGrid.innerHTML += `
+                                <div class="array-cell" title="Binary: ${cellBinary}" style="flex: 1; padding: 6px; border: 1px solid #475569; background: #0f172a; border-radius: 4px; text-align: center; min-width: 55px;">
+                                    <span class="cell-idx" style="font-size: 10px; color: #64748b; display: block; font-family: monospace;">[${rowIndex}][${colIndex}]</span>
+                                    <span class="cell-val" style="color: #38bdf8; font-weight: bold; font-family: monospace; font-size: 14px;">${displayVal}</span>
+                                </div>
+                            `;
+                        });
+                        matrixContainer.appendChild(rowGrid);
+                    });
+                    box.appendChild(matrixContainer);
+
+                } else if (item.type === 'Array' || item.type === 'String/Char Array') {
                     let grid = document.createElement('div');
                     grid.className = 'array-element-grid';
+                    grid.style.display = 'flex';
+                    grid.style.gap = '6px';
+                    grid.style.marginTop = '10px';
                     
-                    let flatDataset = [];
-                    if (item.type === '2D Array' || Array.isArray(item.dataset[0])) {
-                        item.dataset.forEach(subArray => {
-                            if (Array.isArray(subArray)) {
-                                flatDataset.push(...subArray);
-                            } else {
-                                flatDataset.push(subArray);
-                            }
-                        });
-                    } else {
-                        flatDataset = item.dataset;
-                    }
-                    
-                    flatDataset.forEach((val, idx) => {
+                    item.dataset.forEach((val, idx) => {
                         let displayVal = typeof val === 'object' && val !== null ? JSON.stringify(val) : val;
                         let parsedNum = parseInt(val);
                         let cellBinary = getBinaryRepresentation(isNaN(parsedNum) ? val : parsedNum);
                         grid.innerHTML += `
-                            <div class="array-cell" title="Binary: ${cellBinary}">
-                                <span class="cell-idx">[${idx}]</span>
-                                <span class="cell-val">${displayVal}</span>
+                            <div class="array-cell" title="Binary: ${cellBinary}" style="padding: 6px 10px; border: 1px solid #475569; background: #0f172a; border-radius: 4px; text-align: center; min-width: 50px;">
+                                <span class="cell-idx" style="font-size: 10px; color: #64748b; display: block; font-family: monospace;">[${idx}]</span>
+                                <span class="cell-val" style="color: #38bdf8; font-weight: bold; font-family: monospace; font-size: 14px;">${displayVal}</span>
                             </div>
                         `;
                     });
                     box.appendChild(grid);
+
                 } else if (item.type === 'Object') {
                     for (let key in item.dataset) {
                         let propertyBinary = getBinaryRepresentation(item.dataset[key]);
