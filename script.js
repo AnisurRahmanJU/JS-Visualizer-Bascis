@@ -252,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let typeStr = is2DArray ? '2D Array' : (Array.isArray(objValue) ? 'Array' : 'Object');
                 
                 if (is2DArray) {
-                    // সাব-অ্যারেগুলোকে আলাদা রেফারেন্সে না ভেঙে একবারে ডিপ-ক্লোন করে রাখা হচ্ছে
+                    // সাব-ব্লক ছাড়া একদম ক্লিন ওয়ান-বক্স গ্রিড মেট্রিক্স লেআউট
                     let clean2DData = objValue.map(row => Array.isArray(row) ? [...row] : row);
                     virtualHeap[hAddr] = { type: typeStr, dataset: clean2DData };
                     return hAddr;
@@ -459,7 +459,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 box.innerHTML = `<div class="heap-node-addr">${addr} [${item.type}]</div>`;
 
                 if (item.type === '2D Array') {
-                    // সাব-ব্লক ছাড়া একদম ক্লিন ওয়ান-বক্স গ্রিড মেট্রিক্স লেআউট
                     let matrixContainer = document.createElement('div');
                     matrixContainer.className = 'matrix-container';
                     matrixContainer.style.display = 'flex';
@@ -500,7 +499,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     grid.style.marginTop = '10px';
                     
                     item.dataset.forEach((val, idx) => {
-                        let displayVal = typeof val === 'object' && val !== null ? JSON.stringify(val) : val;
+                        // charSetting ফাংশন ব্যবহার করে সিঙ্গেল কোটেশন হ্যান্ডেল করা হচ্ছে
+                        let formattedVal = charSetting(val, item.type);
+                        let displayVal = typeof formattedVal === 'object' && formattedVal !== null ? JSON.stringify(formattedVal) : formattedVal;
                         let parsedNum = parseInt(val);
                         let cellBinary = getBinaryRepresentation(isNaN(parsedNum) ? val : parsedNum);
                         grid.innerHTML += `
@@ -572,4 +573,22 @@ document.addEventListener('DOMContentLoaded', () => {
         activeTimelineIndex = MasterTimelineTrace.length - 1;
         renderStep(activeTimelineIndex);
     });
+
+    /**
+     * Character & String Quotation Setting Formatter
+     * Ensures text-based data displays with clean single quotes in the visualizer UI.
+     */
+    function charSetting(val, type) {
+        if (type === 'String/Char Array' || type === 'Char') {
+            if (typeof val === 'string' && !val.startsWith("'") && !val.endsWith("'")) {
+                return `'${val}'`;
+            }
+        }
+        if (typeof val === 'string' && val.length === 1) {
+            if (!val.startsWith("'") && !val.endsWith("'")) {
+                return `'${val}'`;
+            }
+        }
+        return val;
+    }
 });
