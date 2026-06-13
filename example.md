@@ -1,3 +1,5 @@
+# Code Examples
+---
 # 🧠 1–5: Mixed Basics
 
 ### 1
