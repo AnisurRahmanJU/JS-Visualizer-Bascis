@@ -1,3 +1,6 @@
+/* ==========================================================================
+   RESET & ROOT VARIABLES
+   ========================================================================== */
 *, *::before, *::after {
     box-sizing: border-box;
     margin: 0;
@@ -22,11 +25,14 @@ body {
     background-color: var(--bg-dark-core);
     color: var(--text-silver);
     font-family: 'Inter', system-ui, sans-serif;
-    padding: 12px; /* মোবাইলের জন্য সামান্য কমানো হয়েছে */
+    padding: 12px;
     min-height: 100vh;
-    overflow-x: hidden; /* গ্লোবাল হরাইজনটাল স্ক্রল ব্লক করার জন্য */
+    overflow-x: hidden;
 }
 
+/* ==========================================================================
+   HEADER ARCHITECTURE
+   ========================================================================== */
 header {
     background: linear-gradient(135deg, #1e1b4b 0%, #030712 100%);
     border: 1px solid var(--border-slate);
@@ -67,19 +73,25 @@ header h1 {
     word-break: break-all;
 }
 
-/* Main Grid Architecture */
+/* ==========================================================================
+   MAIN GRID ARCHITECTURE
+   ========================================================================== */
 .tutor-grid {
     display: grid;
     grid-template-columns: 1fr 1.3fr;
     gap: 15px;
-    align-items: start;
+    align-items: stretch; /* Forces left and right panel columns to match heights */
 }
 
 .panel-column {
     display: flex;
     flex-direction: column;
     gap: 15px;
-    min-width: 0; /* গ্রিড ব্রেকিং ফিক্স */
+    min-width: 0;
+}
+
+.panel-column.right-panel {
+    height: 100%;
 }
 
 .panel-card {
@@ -90,6 +102,12 @@ header h1 {
     min-width: 0;
 }
 
+.panel-card.spec-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
 .card-header {
     font-size: 11px;
     font-weight: 700;
@@ -97,8 +115,12 @@ header h1 {
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 12px;
+    flex-shrink: 0;
 }
 
+/* ==========================================================================
+   LEFT COLUMN COMPONENTS
+   ========================================================================== */
 .code-wrapper { 
     margin-bottom: 12px; 
     border-radius: 6px; 
@@ -133,7 +155,6 @@ header h1 {
 }
 .btn-primary:hover { background-color: #2563eb; }
 
-/* Navigation Controllers */
 .navigation-cluster {
     display: flex;
     justify-content: space-between;
@@ -143,7 +164,7 @@ header h1 {
     border-radius: 6px;
     border: 1px solid var(--border-slate);
     gap: 4px;
-    overflow-x: auto; /* ছোট স্ক্রিনে বাটন স্ক্রল করবে */
+    overflow-x: auto;
 }
 
 .btn-nav { 
@@ -152,11 +173,12 @@ header h1 {
     border: 1px solid var(--border-slate); 
     padding: 6px 10px; 
     font-size: 11px;
-    flex: 1; /* বাটনগুলো সমান জায়গা নিবে */
+    flex: 1;
     min-width: fit-content;
 }
 .btn-nav:hover:not(:disabled) { background-color: #374151; }
 .btn-nav:disabled { opacity: 0.2; cursor: not-allowed; }
+
 #stepCounter { 
     font-family: var(--font-monospace); 
     font-size: 11px; 
@@ -172,14 +194,15 @@ header h1 {
     font-family: var(--font-monospace);
     font-size: 12px;
     padding: 10px;
-    min-height: 85px;
-    max-height: 140px;
+    height: 120px; 
     overflow-y: auto;
     white-space: pre-wrap;
     border-radius: 4px;
 }
 
-/* Core Memory Matrix Workspace */
+/* ==========================================================================
+   RIGHT COLUMN: PERFECT CONTAINER HEIGHT SYNC WITH SCROLL LOCKS
+   ========================================================================== */
 .memory-grid-workspace {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -187,12 +210,19 @@ header h1 {
     background-color: var(--bg-inner-terminal);
     padding: 12px;
     border-radius: 8px;
-    min-height: 420px;
+    /* Explicitly locking total height container based on the absolute left panels specs */
+    height: calc(230px + 120px + 182px); 
+    max-height: calc(230px + 120px + 182px);
+    min-height: 532px; 
+    flex-grow: 1;
 }
 
 .memory-block {
-    min-width: 0; /* কন্টেন্ট ব্রেকিং গার্ড */
-    width: 100%;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Critical: Stops data from escaping parent card border grids */
 }
 
 .memory-block h3 {
@@ -203,17 +233,45 @@ header h1 {
     padding-bottom: 6px;
     border-bottom: 1px dashed var(--border-slate);
     text-transform: uppercase;
+    flex-shrink: 0;
 }
 
-/* 🌟 STACK TABLE MOBILE OVERFLOW PROTECTION CONTROLLER */
-#stackRoot {
+/* 🌟 ISOLATED INDEPENDENT VERTICAL AND HORIZONTAL SCROLL REGIONS */
+#stackRoot, 
+#heapRoot {
     width: 100%;
-    overflow-x: auto; /* মোবাইলে টেবিলটি ডান-বামে সুইপ/স্ক্রল করা যাবে */
+    height: 100%;
+    flex-grow: 1;
+    overflow-y: auto; /* ENABLES INDEPENDENT VERTICAL SCROLLING */
+    overflow-x: auto; /* ENABLES HORIZONTAL SCROLLING FOR WIDE CONTENT */
     -webkit-overflow-scrolling: touch;
     border-radius: 6px;
+    padding-bottom: 10px; /* Buffer space so scroll bars do not block variables */
 }
 
-/* Real Hardware Engine Stack Table Layout Matrix */
+/* Custom Scrollbar Styles for Cleaner Visual Aesthetics inside Dark Panels */
+#stackRoot::-webkit-scrollbar,
+#heapRoot::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+#stackRoot::-webkit-scrollbar-track,
+#heapRoot::-webkit-scrollbar-track {
+    background: var(--bg-inner-terminal);
+}
+#stackRoot::-webkit-scrollbar-thumb,
+#heapRoot::-webkit-scrollbar-thumb {
+    background: #374151;
+    border-radius: 3px;
+}
+#stackRoot::-webkit-scrollbar-thumb:hover,
+#heapRoot::-webkit-scrollbar-thumb:hover {
+    background: var(--color-neon-blue);
+}
+
+/* ==========================================================================
+   STACK MEMORY SCHEMATICS
+   ========================================================================== */
 .stack-memory-table {
     width: 100%;
     border-collapse: collapse;
@@ -221,7 +279,7 @@ header h1 {
     background-color: #111827;
     border: 1px solid #374151;
     font-size: 12px;
-    min-width: 460px; /* মোবাইলে কলামগুলোর মিনিমাম রিডিবিলিটি লক রাখার জন্য */
+    min-width: 440px; 
 }
 
 .stack-memory-table th {
@@ -282,15 +340,17 @@ header h1 {
     white-space: nowrap;
 }
 
-/* Heap Components Optimization */
+/* ==========================================================================
+   HEAP: PURPLE DOTTED OBJECT ALLOCATION NODE
+   ========================================================================== */
 .heap-alloc-node {
     background-color: #111827;
-    border: 2px dashed var(--color-neon-amethyst);
+    border: 2px dashed var(--color-neon-amethyst); 
     border-radius: 6px;
     padding: 10px;
     margin-bottom: 12px;
     font-family: var(--font-monospace);
-    word-break: break-all;
+    min-width: 180px; 
 }
 
 .heap-node-addr { 
@@ -302,20 +362,21 @@ header h1 {
     margin-bottom: 8px; 
 }
 
-/* Array Horizontal/Matrix Visualization Grid */
+/* ARRAY ELEMENT GRID SYSTEM */
 .array-element-grid {
     display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
+    flex-wrap: wrap;       /* Clean horizontal matrix drop behavior */
+    gap: 6px;              
     margin-top: 5px;
     background-color: var(--bg-dark-core);
-    padding: 4px;
+    padding: 6px;
     border-radius: 4px;
+    width: 100%;           
 }
 
 .array-cell {
-    flex: 1;
-    min-width: 40px; /* স্ক্রিন সাইজ অনুযায়ী বক্স ছোট হবে */
+    flex: 0 0 calc(25% - 5px); 
+    min-width: 44px;          
     background: #1f2937;
     border: 1px solid #4b5563;
     text-align: center;
@@ -326,6 +387,9 @@ header h1 {
 .cell-idx { font-size: 9px; color: var(--text-dim); display: block; border-bottom: 1px solid #374151; padding-bottom: 1px; }
 .cell-val { font-size: 11px; color: #22c55e; font-weight: bold; display: block; margin-top: 2px; }
 
+/* ==========================================================================
+   MISC STYLES
+   ========================================================================== */
 .pointer-link-tag {
     color: var(--color-neon-amethyst);
     font-weight: bold;
@@ -346,43 +410,7 @@ header h1 {
 }
 
 /* ==========================================================================
-   🌟 RESPONSIVE MEDIA QUERIES (MOBILE CORE MATRIX MASTER)
-   ========================================================================== */
-
-/* 1. Tablets & Low Res Laptops (1024px and down) */
-@media (max-width: 1024px) {
-    .tutor-grid {
-        grid-template-columns: 1fr; /* এডিটর এবং মেমরি উপর-নিচে চলে আসবে */
-    }
-}
-
-/* 2. Mobile Landscape & Phablets (640px and down) */
-@media (max-width: 640px) {
-    .memory-grid-workspace {
-        grid-template-columns: 1fr; /* স্ট্যাক এবং হিপ ব্লক উপর-নিচে বসবে */
-        padding: 10px;
-    }
-    
-    .CodeMirror {
-        height: 200px; /* মোবাইল স্ক্রিনের রেশিও ঠিক রাখতে এডিটর হাইট সামান্য কম */
-    }
-}
-
-/* 3. Tiny Mobile Screens (360px and down) */
-@media (max-width: 360px) {
-    body {
-        padding: 8px;
-    }
-    header h1 {
-        font-size: 1rem;
-    }
-    .panel-card {
-        padding: 10px;
-    }
-}
-
-/* ==========================================================================
-   🌟 SMART FOOTER ARCHITECTURE
+   SMART FOOTER
    ========================================================================== */
 .smart-footer {
     background: linear-gradient(135deg, #030712 0%, #111827 100%);
@@ -459,8 +487,31 @@ header h1 {
     font-size: 14px;
 }
 
-/* Footer Responsive Media Queries */
+/* ==========================================================================
+   RESPONSIVE MEDIA QUERIES
+   ========================================================================== */
+@media (max-width: 1024px) {
+    .tutor-grid {
+        grid-template-columns: 1fr;
+    }
+    .memory-grid-workspace {
+        height: auto;
+        max-height: none;
+        min-height: 480px;
+    }
+}
+
 @media (max-width: 640px) {
+    .memory-grid-workspace {
+        grid-template-columns: 1fr;
+        height: auto;
+        max-height: none;
+    }
+    
+    .CodeMirror {
+        height: 200px;
+    }
+
     .smart-footer {
         padding: 15px;
     }
@@ -478,5 +529,17 @@ header h1 {
     .footer-link, .footer-link-btn {
         width: 100%;
         justify-content: center;
+    }
+}
+
+@media (max-width: 360px) {
+    body {
+        padding: 8px;
+    }
+    header h1 {
+        font-size: 1rem;
+    }
+    .panel-card {
+        padding: 10px;
     }
 }
