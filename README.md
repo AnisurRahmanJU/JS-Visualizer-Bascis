@@ -1,5 +1,5 @@
 # JS Visualizer Pro
-> JavaScript Visualizer Basics Tool
+> JavaScript Visualizer Pro Tool
 ---
 # Code Examples
 ---
