@@ -1,6 +1,6 @@
 # JS Visualizer Pro 
 > JavaScript Visualizer Pro Tool
----
+
 # 🧠 1–5: Mixed Basics
 
 ### 1
