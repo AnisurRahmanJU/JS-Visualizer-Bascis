@@ -138,15 +138,19 @@ console.log(arr);
 ### 11
 
 ```js id="m11"
-let matrix = [
-  [1, 2],
-  [3, 4]
-];
+let arr2D = [];
+let counter = 1;
 
-for (let i = 0; i < matrix.length; i++) {
-  for (let j = 0; j < matrix[i].length; j++) {
-    console.log(matrix[i][j]);
+for (let i = 0; i < 3; i++) {
+  arr2D[i] = [];
+  for (let j = 0; j < 3; j++) {
+    arr2D[i].push(counter);
+    counter++;
   }
+}
+
+for (let i = 0; i < 3; i++) {
+  console.log(arr2D[i].join(""));
 }
 ```
 
